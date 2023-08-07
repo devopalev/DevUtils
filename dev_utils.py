@@ -111,10 +111,3 @@ class TimeWatcher:
             text.append(paragraph + "Not steps")
         text.append("##### END TimeWatcher\n")
         return '\n'.join(text)
-
-
-if __name__ == "__main__":
-    sod_orig = pickle.load(open('trash/df_sod_dump.pkl', 'rb'))
-    new_sod = pickle.load(open('sod_final.pickle', 'rb'))
-    # new_sod.to_csv('new_df_sod22.csv')
-    check_df(sod_orig, new_sod)
