@@ -1,4 +1,5 @@
 import datetime
+import pickle
 
 from pandas import DataFrame
 
@@ -53,6 +54,8 @@ def check_df(source_df: DataFrame, result_df: DataFrame, name="") -> None:
 
             if column_res.equals(column_src):
                 print(paragraph, eq, f'Values in column "{column_name}" equal')
+            elif sorted(list(column_res)) == sorted(list(column_src)):
+                print(paragraph, eq, f'⚠ Values in column "{column_name}" equal, but the rows have changed the order')
             else:
                 print(paragraph, diff, "Difference column", f'"{column_name}"', "(result <-> source, limit rows 10)")
                 difference_column = column_res.compare(column_src)[:10]
@@ -108,3 +111,10 @@ class TimeWatcher:
             text.append(paragraph + "Not steps")
         text.append("##### END TimeWatcher\n")
         return '\n'.join(text)
+
+
+if __name__ == "__main__":
+    sod_orig = pickle.load(open('trash/df_sod_dump.pkl', 'rb'))
+    new_sod = pickle.load(open('sod_final.pickle', 'rb'))
+    # new_sod.to_csv('new_df_sod22.csv')
+    check_df(sod_orig, new_sod)
