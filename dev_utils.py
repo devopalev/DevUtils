@@ -1,10 +1,11 @@
 import datetime
 import pickle
 
+import numpy
 from pandas import DataFrame
 
 
-def check_df(source_df: DataFrame, result_df: DataFrame, name="") -> None:
+def check_df(source_df: DataFrame, result_df: DataFrame, name="", detect_string_array=False) -> None:
     """
      Функция проверяет разницу между двумя датафреймами:
         - кол-во строк
@@ -16,10 +17,25 @@ def check_df(source_df: DataFrame, result_df: DataFrame, name="") -> None:
         check_df(source_df=data_raw, result_df=data_new, name="Name action")
     """
 
+    def convert_str_to_list(value):
+        if isinstance(value, str):
+            return sorted(value.strip(separator_list).split(separator_list))
+        elif isinstance(value, (numpy.ndarray, list, set)):
+            return sorted(value)
+        else:
+            return [value]
+
+    def convert_to_str(value):
+        if isinstance(value, (numpy.ndarray, list, set)):
+            return separator_list.join(sorted(value))
+        else:
+            return str(value)
+
     print("\n##### Start of analysis " + name)
     paragraph = " " * 4
     eq = "✅"
     diff = "❌"
+    separator_list = ", "
 
     # ROWS
     difference_rows = len(result_df) - len(source_df)
@@ -52,15 +68,44 @@ def check_df(source_df: DataFrame, result_df: DataFrame, name="") -> None:
             column_res = result_df[column_name]
             column_src = source_df[column_name]
 
-            if column_res.equals(column_src):
-                print(paragraph, eq, f'Values in column "{column_name}" equal')
-            elif sorted(list(column_res)) == sorted(list(column_src)):
-                print(paragraph, eq, f'⚠ Values in column "{column_name}" equal, but the rows have changed the order')
-            else:
-                print(paragraph, diff, "Difference column", f'"{column_name}"', "(result <-> source, limit rows 10)")
-                difference_column = column_res.compare(column_src)[:10]
-                for v_res, v_src in difference_column.values:
-                    print(paragraph, paragraph, v_res, "<->", v_src)
+            try:
+                if column_res.equals(column_src):
+                    print(paragraph, eq, f'Values in column "{column_name}" equal')
+                    continue
+
+                try:
+                    if column_res.dtype == "array" == column_src.dtype:
+                        sort_list_res = sorted(list(column_res.apply(sorted)))
+                        sort_list_src = sorted(list(column_src.apply(sorted)))
+                    else:
+                        sort_list_res = sorted(list(column_res))
+                        sort_list_src = sorted(list(column_src))
+                except TypeError:  # '<' not supported between instances of 'list' and 'str'
+                    sort_list_res = sorted(list(column_res.apply(convert_to_str)))
+                    sort_list_src = sorted(list(column_src.apply(convert_to_str)))
+
+                if detect_string_array and column_res.dtype == "object" == column_src.dtype:
+                    try:
+                        max_v_res = max(sort_list_res, key=len)
+                        max_v_src = max(sort_list_src, key=len)
+
+                        if isinstance(max_v_res, str) and separator_list in max_v_res \
+                                and isinstance(max_v_src, str) and separator_list in max_v_src:
+                            sort_list_res = sorted(list(column_res.apply(convert_str_to_list)))
+                            sort_list_src = sorted(list(column_src.apply(convert_str_to_list)))
+                            print("\n" + paragraph, f"ℹ Found an array in the string. Column {column_name}.")
+                    except Exception as err:
+                        print("\n" + paragraph, f"❗ Error detect string array column ({column_name}):", str(err))
+
+                if sort_list_res == sort_list_src:
+                    print(paragraph, eq, f'❗ ❗ ❗ Values in column "{column_name}" equal, but the rows have changed the order')
+                else:
+                    print(paragraph, diff, "Difference column", f'"{column_name}"', "(result <-> source, limit rows 10)")
+                    difference_column = column_res.compare(column_src)[:10]
+                    for v_res, v_src in difference_column.values:
+                        print(paragraph, paragraph, v_res, "<->", v_src)
+            except Exception as err:
+                print("\n" + paragraph, f"🚫 Error comparison ({column_name}):", str(err))
     else:
         text = "❓ Different"
         if not difference_rows == 0:
@@ -77,6 +122,7 @@ class TimeWatcher:
         Во время инициализации фиксируется время начала. Далее с помощью функции fix_time добавляем шаги выполнения,
         после фиксации всех необходимых шагов сделайте print(obj_time_watcher).
     """
+
     def __init__(self):
         self._start = datetime.datetime.now()
         self._action_name = []
@@ -111,3 +157,16 @@ class TimeWatcher:
             text.append(paragraph + "Not steps")
         text.append("##### END TimeWatcher\n")
         return '\n'.join(text)
+
+
+if __name__ == "__main__":
+    # sod_orig = pickle.load(open('df_sod_dump.pkl', 'rb'))
+    # new_sod = pickle.load(open('sod_new0408232200.pickle', 'rb'))
+
+    orig = pickle.load(open('result.pkl', 'rb'))
+    new = pickle.load(open('new_result.pkl', 'rb'))
+    # new.to_csv('data_dm_user.csv')
+
+    # sod_orig.to_csv("pivot_df_anomalies_dump.csv")
+    # new_sod.to_csv("pivot_df_anomalies_new.csv")
+    check_df(orig, new, detect_string_array=False)
